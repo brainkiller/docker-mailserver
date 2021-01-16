@@ -2080,7 +2080,7 @@ function _start_daemons_fetchmail
     COUNTER=0
     for rc in /etc/fetchmailrc.d/fetchmail-*.rc
     do
-
+      COUNTER=$((COUNTER+1))
       cat <<EOF > "/etc/supervisor/conf.d/fetchmail-${COUNTER}.conf"
 [program:fetchmail-${COUNTER}]
 startsecs=0
@@ -2091,7 +2091,6 @@ stderr_logfile=/var/log/supervisor/%(program_name)s.log
 user=fetchmail
 command=/usr/bin/fetchmail -f ${rc} -v --nodetach --daemon %(ENV_FETCHMAIL_POLL)s -i /var/lib/fetchmail/.fetchmail-UIDL-cache --pidfile /var/run/fetchmail/%(program_name)s.pid
 EOF
-      COUNTER=$((COUNTER+1))
     done
 
     supervisorctl reread
