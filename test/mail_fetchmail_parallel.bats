@@ -19,7 +19,7 @@ function setup_file() {
 		--cap-add=NET_ADMIN \
 		-e DMS_DEBUG=0 \
 		-h mail.my-domain.com -t "${NAME}"
-    wait_for_finished_setup_in_container mail_fetchmail
+    wait_for_finished_setup_in_container mail_fetchmail_parallel
 }
 
 function teardown_file() {
@@ -35,12 +35,12 @@ function teardown_file() {
 #
 
 @test "checking process: fetchmail 1 (fetchmail server enabled)" {
-  run docker exec mail_fetchmail /bin/bash -c "ps aux --forest | grep -v grep | grep '/usr/bin/fetchmail -f /etc/fetchmailrc.d/fetchmail-1.rc'"
+  run docker exec mail_fetchmail_parallel /bin/bash -c "ps aux --forest | grep -v grep | grep '/usr/bin/fetchmail -f /etc/fetchmailrc.d/fetchmail-1.rc'"
   assert_success
 }
 
 @test "checking process: fetchmail 2 (fetchmail server enabled)" {
-  run docker exec mail_fetchmail /bin/bash -c "ps aux --forest | grep -v grep | grep '/usr/bin/fetchmail -f /etc/fetchmailrc.d/fetchmail-2.rc'"
+  run docker exec mail_fetchmail_parallel /bin/bash -c "ps aux --forest | grep -v grep | grep '/usr/bin/fetchmail -f /etc/fetchmailrc.d/fetchmail-2.rc'"
   assert_success
 }
 
@@ -49,32 +49,32 @@ function teardown_file() {
 #
 
 @test "checking fetchmail: gerneral options in fetchmail-1.rc are loaded" {
-  run docker exec mail_fetchmail grep 'set syslog' /etc/fetchmailrc.d/fetchmail-1.rc
+  run docker exec mail_fetchmail_parallel grep 'set syslog' /etc/fetchmailrc.d/fetchmail-1.rc
   assert_success
 }
 
 @test "checking fetchmail: gerneral options in fetchmail-2.rc are loaded" {
-  run docker exec mail_fetchmail grep 'set syslog' /etc/fetchmailrc.d/fetchmail-2.rc
+  run docker exec mail_fetchmail_parallel grep 'set syslog' /etc/fetchmailrc.d/fetchmail-2.rc
   assert_success
 }
 
 @test "checking fetchmail: fetchmail-1.rc is loaded with pop3.example.com" {
-  run docker exec mail_fetchmail grep 'pop3.example.com' /etc/fetchmailrc.d/fetchmail-1.rc
+  run docker exec mail_fetchmail_parallel grep 'pop3.example.com' /etc/fetchmailrc.d/fetchmail-1.rc
   assert_success
 }
 
 @test "checking fetchmail: fetchmail-1.rc is loaded without pop3.example2.com" {
-  run docker exec mail_fetchmail grep 'pop3.example2.com' /etc/fetchmailrc.d/fetchmail-1.rc
+  run docker exec mail_fetchmail_parallel grep 'pop3.example2.com' /etc/fetchmailrc.d/fetchmail-1.rc
   assert_failure
 }
 
 @test "checking fetchmail: fetchmail-2.rc is loaded without pop3.example.com" {
-  run docker exec mail_fetchmail grep 'pop3.example.com' /etc/fetchmailrc.d/fetchmail-2.rc
+  run docker exec mail_fetchmail_parallel grep 'pop3.example.com' /etc/fetchmailrc.d/fetchmail-2.rc
   assert_failure
 }
 
 @test "checking fetchmail: fetchmail-2.rc is loaded with pop3.example2.com" {
-  run docker exec mail_fetchmail grep 'pop3.example2.com' /etc/fetchmailrc.d/fetchmail-2.rc
+  run docker exec mail_fetchmail_parallel grep 'pop3.example2.com' /etc/fetchmailrc.d/fetchmail-2.rc
   assert_success
 }
 
@@ -83,7 +83,7 @@ function teardown_file() {
 #
 
 @test "checking restart of process: fetchmail" {
-  run docker exec mail_fetchmail /bin/bash -c "killall fetchmail && sleep 10 && ps aux --forest | grep -v grep | grep '/usr/bin/fetchmail'"
+  run docker exec mail_fetchmail_parallel /bin/bash -c "killall fetchmail && sleep 10 && ps aux --forest | grep -v grep | grep '/usr/bin/fetchmail'"
   assert_success
 }
 
