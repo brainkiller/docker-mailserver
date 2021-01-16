@@ -18,6 +18,7 @@ ENABLE_SASLAUTHD="${ENABLE_SASLAUTHD:=0}"
 ENABLE_SPAMASSASSIN="${ENABLE_SPAMASSASSIN:=0}"
 ENABLE_SRS="${ENABLE_SRS:=0}"
 FETCHMAIL_POLL="${FETCHMAIL_POLL:=300}"
+FETCHMAIL_PARALLEL="${FETCHMAIL_PARALLEL:=0}"
 LDAP_START_TLS="${LDAP_START_TLS:=no}"
 LOGROTATE_INTERVAL="${LOGROTATE_INTERVAL:=${REPORT_INTERVAL:-daily}}"
 LOGWATCH_INTERVAL="${LOGWATCH_INTERVAL:=none}"
@@ -2068,9 +2069,45 @@ function _start_daemons_dovecot
 
 function _start_daemons_fetchmail
 {
-  _notify 'task' 'Starting fetchmail' 'n'
+  _notify 'task' 'Preparing fetchmail config'
   /usr/local/bin/setup-fetchmail
-  supervisorctl start fetchmail
+  if [[ ${FETCHMAIL_PARALLEL} -eq 1 ]]
+  then
+    mkdir /etc/fetchmailrc.d/
+    /usr/local/bin/fetchmailrc_split
+
+    i=0
+    for rc in /etc/fetchmailrc.d/fetchmail-*.rc
+    do
+
+      cat <<EOF > "/etc/supervisor/conf.d/fetchmail-${i}.conf"
+[program:fetchmail-${i}]
+startsecs=0
+autostart=false
+autorestart=true
+stdout_logfile=/var/log/supervisor/%(program_name)s.log
+stderr_logfile=/var/log/supervisor/%(program_name)s.log
+user=fetchmail
+command=/usr/bin/fetchmail -f ${rc} -v --nodetach --daemon %(ENV_FETCHMAIL_POLL)s -i /var/lib/fetchmail/.fetchmail-UIDL-cache --pidfile /var/run/fetchmail/%(program_name)s.pid
+EOF
+      i=$((i+1))
+    done
+
+    supervisorctl reread
+    supervisorctl update
+
+    i=0
+    for rc in /etc/fetchmailrc.d/fetchmail-*.rc
+    do
+      _notify 'task' "Starting fetchmail instance ${i}" 'n'
+      supervisorctl start "fetchmail-${i}"
+      i=$((i+1))
+    done
+
+  else
+    _notify 'task' 'Starting fetchmail' 'n'
+    supervisorctl start fetchmail
+  fi
 }
 
 function _start_daemons_clamav
