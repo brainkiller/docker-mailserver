@@ -39,7 +39,7 @@ function teardown_file() {
   assert_success
 }
 
-@test "checking process: fetchmail 1 (fetchmail server enabled)" {
+@test "checking process: fetchmail 2 (fetchmail server enabled)" {
   run docker exec mail_fetchmail /bin/bash -c "ps aux --forest | grep -v grep | grep '/usr/bin/fetchmail -f /etc/fetchmailrc.d/fetchmail-2.rc'"
   assert_success
 }
@@ -58,22 +58,22 @@ function teardown_file() {
   assert_success
 }
 
-@test "checking fetchmail: fetchmail-1.rc is loaded" {
+@test "checking fetchmail: fetchmail-1.rc is loaded with pop3.example.com" {
   run docker exec mail_fetchmail grep 'pop3.example.com' /etc/fetchmailrc.d/fetchmail-1.rc
   assert_success
 }
 
-@test "checking fetchmail: fetchmail-1.rc is loaded" {
+@test "checking fetchmail: fetchmail-1.rc is loaded without pop3.example2.com" {
   run docker exec mail_fetchmail grep 'pop3.example2.com' /etc/fetchmailrc.d/fetchmail-1.rc
   assert_failure
 }
 
-@test "checking fetchmail: fetchmail-2.rc is loaded" {
+@test "checking fetchmail: fetchmail-2.rc is loaded without pop3.example.com" {
   run docker exec mail_fetchmail grep 'pop3.example.com' /etc/fetchmailrc.d/fetchmail-2.rc
   assert_failure
 }
 
-@test "checking fetchmail: fetchmail-2.rc is loaded" {
+@test "checking fetchmail: fetchmail-2.rc is loaded with pop3.example2.com" {
   run docker exec mail_fetchmail grep 'pop3.example2.com' /etc/fetchmailrc.d/fetchmail-2.rc
   assert_success
 }
