@@ -63,8 +63,8 @@ function teardown_file() {
   assert_success
 }
 
-@test "checking fetchmail: fetchmail-1.rc is loaded without pop3.example2.com" {
-  run docker exec mail_fetchmail_parallel grep 'pop3.example2.com' /etc/fetchmailrc.d/fetchmail-1.rc
+@test "checking fetchmail: fetchmail-1.rc is loaded without pop3-2.example.com" {
+  run docker exec mail_fetchmail_parallel grep 'pop3-2.example.com' /etc/fetchmailrc.d/fetchmail-1.rc
   assert_failure
 }
 
@@ -73,8 +73,8 @@ function teardown_file() {
   assert_failure
 }
 
-@test "checking fetchmail: fetchmail-2.rc is loaded with pop3.example2.com" {
-  run docker exec mail_fetchmail_parallel grep 'pop3.example2.com' /etc/fetchmailrc.d/fetchmail-2.rc
+@test "checking fetchmail: fetchmail-2.rc is loaded with pop3-2.example.com" {
+  run docker exec mail_fetchmail_parallel grep 'pop3-2.example.com' /etc/fetchmailrc.d/fetchmail-2.rc
   assert_success
 }
 
