@@ -2078,7 +2078,7 @@ function _start_daemons_fetchmail
     /usr/local/bin/fetchmailrc_split
 
     COUNTER=0
-    for rc in /etc/fetchmailrc.d/fetchmail-*.rc
+    for RC in /etc/fetchmailrc.d/fetchmail-*.rc
     do
       COUNTER=$((COUNTER+1))
       cat <<EOF > "/etc/supervisor/conf.d/fetchmail-${COUNTER}.conf"
@@ -2089,8 +2089,10 @@ autorestart=true
 stdout_logfile=/var/log/supervisor/%(program_name)s.log
 stderr_logfile=/var/log/supervisor/%(program_name)s.log
 user=fetchmail
-command=/usr/bin/fetchmail -f ${rc} -v --nodetach --daemon %(ENV_FETCHMAIL_POLL)s -i /var/lib/fetchmail/.fetchmail-UIDL-cache --pidfile /var/run/fetchmail/%(program_name)s.pid
+command=/usr/bin/fetchmail -f ${RC} -v --nodetach --daemon %(ENV_FETCHMAIL_POLL)s -i /var/lib/fetchmail/.fetchmail-UIDL-cache --pidfile /var/run/fetchmail/%(program_name)s.pid
 EOF
+      chmod 700 "${RC}"
+      chown fetchmail:root "${RC}"
     done
 
     supervisorctl reread
@@ -2099,9 +2101,9 @@ EOF
     COUNTER=0
     for rc in /etc/fetchmailrc.d/fetchmail-*.rc
     do
+      COUNTER=$((COUNTER+1))
       _notify 'task' "Starting fetchmail instance ${COUNTER}" 'n'
       supervisorctl start "fetchmail-${COUNTER}"
-      COUNTER=$((COUNTER+1))
     done
 
   else
