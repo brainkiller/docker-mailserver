@@ -397,6 +397,7 @@ function _setup_default_vars
     echo "ENABLE_SPAMASSASSIN=${ENABLE_SPAMASSASSIN}"
     echo "ENABLE_SRS=${ENABLE_SRS}"
     echo "FETCHMAIL_POLL=${FETCHMAIL_POLL}"
+    echo "FETCHMAIL_PARALLEL=${FETCHMAIL_PARALLEL}"
     echo "LDAP_START_TLS=${LDAP_START_TLS}"
     echo "LOGROTATE_INTERVAL=${LOGROTATE_INTERVAL}"
     echo "LOGWATCH_INTERVAL=${LOGWATCH_INTERVAL}"
@@ -2076,12 +2077,12 @@ function _start_daemons_fetchmail
     mkdir /etc/fetchmailrc.d/
     /usr/local/bin/fetchmailrc_split
 
-    i=0
+    COUNTER=0
     for rc in /etc/fetchmailrc.d/fetchmail-*.rc
     do
 
-      cat <<EOF > "/etc/supervisor/conf.d/fetchmail-${i}.conf"
-[program:fetchmail-${i}]
+      cat <<EOF > "/etc/supervisor/conf.d/fetchmail-${COUNTER}.conf"
+[program:fetchmail-${COUNTER}]
 startsecs=0
 autostart=false
 autorestart=true
@@ -2090,18 +2091,18 @@ stderr_logfile=/var/log/supervisor/%(program_name)s.log
 user=fetchmail
 command=/usr/bin/fetchmail -f ${rc} -v --nodetach --daemon %(ENV_FETCHMAIL_POLL)s -i /var/lib/fetchmail/.fetchmail-UIDL-cache --pidfile /var/run/fetchmail/%(program_name)s.pid
 EOF
-      i=$((i+1))
+      COUNTER=$((COUNTER+1))
     done
 
     supervisorctl reread
     supervisorctl update
 
-    i=0
+    COUNTER=0
     for rc in /etc/fetchmailrc.d/fetchmail-*.rc
     do
-      _notify 'task' "Starting fetchmail instance ${i}" 'n'
-      supervisorctl start "fetchmail-${i}"
-      i=$((i+1))
+      _notify 'task' "Starting fetchmail instance ${COUNTER}" 'n'
+      supervisorctl start "fetchmail-${COUNTER}"
+      COUNTER=$((COUNTER+1))
     done
 
   else
