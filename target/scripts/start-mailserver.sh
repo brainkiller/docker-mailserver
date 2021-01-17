@@ -2099,7 +2099,7 @@ EOF
     supervisorctl update
 
     COUNTER=0
-    for RC in /etc/fetchmailrc.d/fetchmail-*.rc
+    for _ in /etc/fetchmailrc.d/fetchmail-*.rc
     do
       COUNTER=$((COUNTER+1))
       _notify 'task' "Starting fetchmail instance ${COUNTER}" 'n'
