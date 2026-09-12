@@ -20,8 +20,9 @@ function _setup_postfix_early() {
   fi
 
   __postfix__log 'trace' "Configuring SASLauthd"
-  if [[ ${ENABLE_SASLAUTHD} -eq 1 ]] && [[ ! -f /etc/postfix/sasl/smtpd.conf ]]; then
-    cat >/etc/postfix/sasl/smtpd.conf << EOF
+  if [[ ${ENABLE_SASLAUTHD} -eq 1 ]] && [[ ! -f /etc/sasl2/smtpd.conf ]]; then
+    mkdir -p /etc/sasl2
+    cat >/etc/sasl2/smtpd.conf << EOF
 pwcheck_method: saslauthd
 mech_list: plain login
 EOF
@@ -48,9 +49,6 @@ EOF
   # scripts/helpers/postfix.sh:_create_postfix_vhost()
   __postfix__log 'trace' 'Setting up Postfix vhost'
   _create_postfix_vhost
-
-  __postfix__log 'trace' 'Setting up DH Parameters'
-  _setup_dhparam 'Postfix' '/etc/postfix/dhparams.pem'
 
   __postfix__log 'trace' "Configuring message size limit to '${POSTFIX_MESSAGE_SIZE_LIMIT}'"
   postconf "message_size_limit = ${POSTFIX_MESSAGE_SIZE_LIMIT}"

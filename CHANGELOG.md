@@ -2,41 +2,124 @@
 
 All notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased](https://github.com/docker-mailserver/docker-mailserver/compare/v15.1.0...HEAD)
+## [Unreleased](https://github.com/docker-mailserver/docker-mailserver/compare/v16.0.1...HEAD)
 
 > **Note**: Changes and additions listed here are contained in the `:edge` image tag. These changes may not be as stable as released changes.
 
+### Breaking
+
+- **Dovecot**
+  - The `dovecot-fts-xapian` plugin is no longer included in the image. Existing users must remove their Xapian configuration and migrate to Flatcurve; existing `xapian-indexes` cannot be reused by Flatcurve.
+- **Rspamd**
+  - `setup config dkim` now writes keys as `<domain>-<selector>.private` (previously `<keytype>-<keysize>-<selector>-<domain>.private.txt`). The default `dkim_signing.conf` uses a `$domain-$selector` path template with `try_fallback = true`, so multiple domains share one config. Existing `dkim_signing.conf` files are not overwritten. Rename keys to the new layout if you regenerate them (OpenDKIM: `opendkim/keys/<domain>/<selector>.private` → `rspamd/dkim/<domain>-<selector>.private`). ([#4653](https://github.com/docker-mailserver/docker-mailserver/pull/4653))
+  - `setup config dkim` writes a persisted `dkim_selectors.map` for custom selectors. Documentation covers multi-domain setup, OpenDKIM migration, and Ed25519 + RSA fallback (distinct selectors plus a `selectors` array). ([#4653](https://github.com/docker-mailserver/docker-mailserver/pull/4653))
+
+
+### Updated
+- **Getmail**
+  - Introduced parallel processing of getmail configs to benefit from IMAP IDLE capabilities.
+
+### CI
+
+- Moved `setup_cli.bats` to the serial test suite to prevent `setup.sh` from racing with teardown of another DMS test container ([#4701](https://github.com/docker-mailserver/docker-mailserver/issues/4701))
+- Excluded `saslauthd` from the process kill/restart assertion because its forked parent process is not reliably reaped by the test
+
 ### Fixed
 
-- **Rspamd:**
-  - Configuration changes now trigger a service reload instead of a restart ([#4632](https://github.com/docker-mailserver/docker-mailserver/pull/4632))
-- **Internal:**
-  - `ENABLE_QUOTAS=1` - When an alias has multiple addresses, the first local mailbox address found will be used for the Dovecot dummy account workaround ([#4581](https://github.com/docker-mailserver/docker-mailserver/pull/4581))
-  - Change Detection service - Added support for responding to updated DMS config (_Rspamd and TLS certificates_) to `ACCOUNT_PROVISIONER=LDAP` ([#4627](https://github.com/docker-mailserver/docker-mailserver/pull/4627))
-- **Tests:**
-  - Make the helper method `_get_container_ip()` compatible with Docker 29 ([#4606](https://github.com/docker-mailserver/docker-mailserver/pull/4606))
+- **Dovecot**
+  - FTS solr config: pinned to solr:10.0, explictly start solr in user managed mode and remove the attachment text extraction example. 
 
-### Removed
+### Documentation
 
-- **SpamAssassin:**
-  - Removed Pyzor + Razor due to maintenance concerns. From observations it is unlikely to have any notable regression ([#4548](https://github.com/docker-mailserver/docker-mailserver/pull/4548))
+- Added a community guide for enabling Dovecot 2.4 mailbox compression ([#4578](https://github.com/docker-mailserver/docker-mailserver/pull/4578))
+
+## [v16.0.1](https://github.com/docker-mailserver/docker-mailserver/releases/tag/v16.0.1)
+
+### Added
+
+- **Dovecot**
+  - `dovecot-solr` is included by default again; using it is optional and requires manual configuration by the user (consult the documentation) ([#4782](https://github.com/docker-mailserver/docker-mailserver/pull/4782))
+
+### Fixed
+
+- **Dovecot**
+  - `ENABLE_QUOTAS=1` no longer rejects aliases that forward to external addresses. Restored the `quota_status_*` responses dropped during the Dovecot 2.3 to 2.4 migration ([#4769](https://github.com/docker-mailserver/docker-mailserver/pull/4769), [#4767](https://github.com/docker-mailserver/docker-mailserver/issues/4767))
+  - LDAP `DOVECOT_PASS_ATTRS`, `DOVECOT_USER_ATTRS`, and `DOVECOT_AUTH_BIND` now configure Dovecot 2.4 LDAP fields and authentication binds correctly ([#4770](https://github.com/docker-mailserver/docker-mailserver/pull/4770), [#4777](https://github.com/docker-mailserver/docker-mailserver/issues/4777))
+- **Internal**
+  - `/var/mail` permission repair now runs `chown -R` only on paths `find` reports as mismatched (within `-maxdepth 3`), instead of `chown -R` on the entire tree. Account creation sets ownership on the new mailbox directory (`mail_path`) so change detection no longer needs to scan `/var/mail` ([#4696](https://github.com/docker-mailserver/docker-mailserver/pull/4696), [#4112](https://github.com/docker-mailserver/docker-mailserver/issues/4112))
+- **Documentation**
+  - Revised the FTS documentation for Dovecot 2.4 (Solr 10.x, Flatcurve, and Xapian) ([#4773](https://github.com/docker-mailserver/docker-mailserver/pull/4773), [#4783](https://github.com/docker-mailserver/docker-mailserver/pull/4783))
+  - Updated mail-crypt documentation for Dovecot 2.4 ([#4764](https://github.com/docker-mailserver/docker-mailserver/pull/4764))
+
+## [v16.0.0](https://github.com/docker-mailserver/docker-mailserver/releases/tag/v16.0.0)
+
+> [!note]
+>
+> This release updates the base image from Debian 12 to Debian 13 (Dovecot 2.3 → 2.4). Review custom Dovecot and LDAP config before upgrading. A file at `/tmp/docker-mailserver/dhparams.pem` is no longer applied.
+
+### Breaking
+
+- **Environment Variables:**
+  - `SA_SPAM_SUBJECT` is no longer accepted. Use `SPAM_SUBJECT` instead.
 
 ### Updated
 
+- **Base Image**
+  - the base image has been updated from Debian 12 to Debian 13 ([#4536](https://github.com/docker-mailserver/docker-mailserver/pull/4536))
 - **Documentation:**
   - The maintenance page (covering `watchtower` guidance) was revised and migrated to direct users to the maintained community fork [`nicholas-fedor/watchtower`](https://github.com/nicholas-fedor/watchtower) ([#4641](https://github.com/docker-mailserver/docker-mailserver/pull/4641))
+  - Clarified summary of `postfix-master.cf` file ([#4727](https://github.com/docker-mailserver/docker-mailserver/pull/4727))
+  - Docs builder image `mkdocs-material` updated from `9.6` to `9.7` ([#4757](https://github.com/docker-mailserver/docker-mailserver/pull/4757))
 - **Internal:**
   - Aligning with the change in upstream Debian, APT package repositories added by DMS have migrated the format from `.list` to `.sources` ([DEB822](https://repolib.readthedocs.io/en/latest/deb822-format.html)) ([#4556](https://github.com/docker-mailserver/docker-mailserver/pull/4556))
   - Third-party sourced CLI tools updated ([#4557](https://github.com/docker-mailserver/docker-mailserver/pull/4557)):
-    - `jaq` from `2.1.0` to [`2.3.0`](https://github.com/01mf02/jaq/releases/tag/v2.3.0)
-    - `step` CLI from `0.28.2` to [`0.28.7`](https://github.com/smallstep/cli/releases/tag/v0.28.7))
-  - DMS logs now all output to STDERR (formerly only warning/error logs) (#[4586](https://github.com/docker-mailserver/docker-mailserver/pull/4586))
+    - `jaq` from `2.1.0` to [`3.1.1`](https://github.com/01mf02/jaq/releases/tag/v3.1.1)
+    - `step` CLI from `0.28.2` to [`0.30.6`](https://github.com/smallstep/cli/releases/tag/v0.30.6)
+  - DMS logs now all output to STDERR (formerly only warning/error logs) ([#4586](https://github.com/docker-mailserver/docker-mailserver/pull/4586))
 - **Dovecot**
+  - Upgraded from 2.3 to 2.4. Custom `dovecot.cf` using 2.3 syntax will not load ([#4536](https://github.com/docker-mailserver/docker-mailserver/pull/4536))
+  - `dovecot-flatcurve` is now installed ([#4759](https://github.com/docker-mailserver/docker-mailserver/pull/4759))
+  - Quota grace remains 10% of each mailbox. Dovecot 2.4 `quota_storage_grace` is a size (not a percentage), so per-user quotas now set it explicitly
+  - LDAP: `mailStorageDirectory` is now a filesystem path only (drop the `maildir:` prefix); Dovecot maps it to `mail_path` instead of `mail`
   - Updated the FTS plugin Xapian from `1.9` to [`1.9.1`](https://github.com/grosjo/fts-xapian/releases/tag/1.9.1) which adds Dovecot 2.4 compatibility ([#4557](https://github.com/docker-mailserver/docker-mailserver/pull/4557))
 - **Postfix**
   - Replaced `disable_dns_lookups` with `smtp_dns_support_level` in Amavis configuration ([#4568](https://github.com/docker-mailserver/docker-mailserver/pull/4568))
-- **Getmail**
-  - Introduced parallel processing of getmail configs to benefit from IMAP IDLE capabilities.
+- **Fail2Ban**
+  - Fail2Ban (`1.1.0` => [`1.1.1`](https://github.com/fail2ban/fail2ban/releases/tag/1.1.1)). The Postfix and Dovecot jails are pinned to the file backend because Debian paths now default to the systemd journal ([#4755](https://github.com/docker-mailserver/docker-mailserver/pull/4755)).
+
+### Fixed
+
+- **Dovecot:**
+  - The passwd-file `home:default` fallback now uses `%{user | username}` (local-part) so it matches `mail_home` / `mail_path` ([#4744](https://github.com/docker-mailserver/docker-mailserver/issues/4744))
+  - `auth_username_format` in the passwd-file and master passdbs now uses Dovecot's documented default `%{user | lower}` ([#4744](https://github.com/docker-mailserver/docker-mailserver/issues/4744))
+- **Rspamd:**
+  - Configuration changes now trigger a service reload instead of a restart ([#4632](https://github.com/docker-mailserver/docker-mailserver/pull/4632))
+  - `expand_keys = true` has been removed from the Redis configuration ([#4689](https://github.com/docker-mailserver/docker-mailserver/pull/4689))
+- **OpenDKIM:**
+  - The `OmitHeaders` setting no longer ends with a stray `<Paste>` string. The final entry parsed as a header named `DKIM-Signature<Paste>`, so `DKIM-Signature` was never actually omitted ([#4750](https://github.com/docker-mailserver/docker-mailserver/issues/4750))
+- **Internal:**
+  - `ENABLE_QUOTAS=1` - When an alias has multiple addresses, the first local mailbox address found will be used for the Dovecot dummy account workaround ([#4581](https://github.com/docker-mailserver/docker-mailserver/pull/4581))
+  - Change Detection service - Added support for responding to updated DMS config (_Rspamd and TLS certificates_) to `ACCOUNT_PROVISIONER=LDAP` ([#4627](https://github.com/docker-mailserver/docker-mailserver/pull/4627))
+  - The `Dockerfile` has changed the source of `dovecot-fts-xapian` package from the [upstream Github repo source](https://github.com/grosjo/fts-xapian) (_which is presently unaccessible_) to instead use the [Debian package source files](https://deb.debian.org/debian/pool/main/d/dovecot-fts-xapian/) ([#4700](https://github.com/docker-mailserver/docker-mailserver/pull/4700))
+  - Added the command `dms-healthcheck` to ease implementing a healthcheck for services enabled in DMS. ([#4706](https://github.com/docker-mailserver/docker-mailserver/pull/4706))
+    - Includes a default [`HEALTHCHECK`](https://docs.docker.com/reference/dockerfile/#healthcheck) in the `Dockerfile` for container runtimes that support it.
+    - Runtimes like k8s or podman must configure a healthcheck explicitly. The DMS Helm chart (`docker-mailserver-helm`) will be [updated to use `dms-healthcheck`](https://github.com/docker-mailserver/docker-mailserver-helm/pull/135).
+- **Tests:**
+  - Make the helper method `_get_container_ip()` compatible with Docker 29 ([#4606](https://github.com/docker-mailserver/docker-mailserver/pull/4606))
+  - Wait for Dovecot and an empty Postfix queue in `special_use_folders.bats` before asserting delivery ([#4562](https://github.com/docker-mailserver/docker-mailserver/pull/4562))
+- **Pflogsumm:**
+  - Fix wrong daily reporting when mail log retention is greater than one year ([#4709](https://github.com/docker-mailserver/docker-mailserver/pull/4709), [#4722](https://github.com/docker-mailserver/docker-mailserver/pull/4722))
+
+### Removed
+
+- **TLS:**
+  - Removed the bundled RFC 7919 `ffdhe4096` DH parameters and the `/tmp/docker-mailserver/dhparams.pem` override. Postfix `smtpd_tls_dh1024_param_file` and Dovecot `ssl_server_dh_file` are unset; a `dhparams.pem` file is ignored without a warning. DHE cipher suites are no longer offered on the authenticated ports (587/465, 143/993, 110/995) for Postfix or Dovecot; port 25 is unchanged. [Restore DHE via config overrides](https://docker-mailserver.github.io/docker-mailserver/v16.0/config/security/ssl/#using-custom-dh-parameters) ([#4562](https://github.com/docker-mailserver/docker-mailserver/pull/4562), [#4538](https://github.com/docker-mailserver/docker-mailserver/issues/4538))
+- **SpamAssassin:**
+  - Removed Pyzor + Razor due to maintenance concerns. From observations it is unlikely to have any notable regression ([#4548](https://github.com/docker-mailserver/docker-mailserver/pull/4548))
+
+### CI
+
+- Improved GitHub Actions caching ([#4753](https://github.com/docker-mailserver/docker-mailserver/pull/4753))
 
 ## [v15.1.0](https://github.com/docker-mailserver/docker-mailserver/compare/v15.1.0...HEAD)
 

@@ -23,7 +23,7 @@ function setup_file() {
   # Setup local openldap service:
   # TODO: Migrate away from `bitnamilegacy/openldap`: https://github.com/docker-mailserver/docker-mailserver/issues/4582
   docker run --rm -d --name "${CONTAINER2_NAME}" \
-    --env LDAP_ADMIN_PASSWORD=admin \
+    --env LDAP_ADMIN_PASSWORD=secret \
     --env LDAP_ROOT='dc=example,dc=test' \
     --env LDAP_PORT_NUMBER=389 \
     --env LDAP_SKIP_DEFAULT_TREE=yes \
@@ -84,11 +84,11 @@ function setup_file() {
   local SASLAUTHD_QUERY='(&(userID=%U)(mailEnabled=TRUE))'
 
   # Dovecot is configured to lookup a user account by their login name (`userID` in this case, but it could be any attribute like `mail`).
-  # Dovecot syntax token `%n` is the local-part of the full email address supplied as the login name. There must be a unique match on `userID` (which there will be as each account is configured via LDIF to use it in their DN)
+  # Dovecot syntax token `%{user | username}` is the local-part of the full email address supplied as the login name. There must be a unique match on `userID` (which there will be as each account is configured via LDIF to use it in their DN)
   # NOTE: We already have a constraint on the LDAP tree to search (`LDAP_SEARCH_BASE`), if all objects in that subtree use `PostfixBookMailAccount` class then there is no benefit in the extra constraint.
-  # TODO: For tests, that additional constraint is meaningless. We can detail it in our docs instead and just use `userID=%n`.
-  local DOVECOT_QUERY_PASS='(&(userID=%n)(objectClass=PostfixBookMailAccount))'
-  local DOVECOT_QUERY_USER='(&(userID=%n)(objectClass=PostfixBookMailAccount))'
+  # TODO: For tests, that additional constraint is meaningless. We can detail it in our docs instead and just use `userID=%{user | username}`.
+  local DOVECOT_QUERY_PASS='(&(userID=%{user | username})(objectClass=PostfixBookMailAccount))'
+  local DOVECOT_QUERY_USER='(&(userID=%{user | username})(objectClass=PostfixBookMailAccount))'
 
   local ENV_LDAP_CONFIG=(
     --env ACCOUNT_PROVISIONER=LDAP
@@ -100,7 +100,7 @@ function setup_file() {
     --env LDAP_START_TLS=no
     # Credentials needed for read access to LDAP_SEARCH_BASE:
     --env LDAP_BIND_DN='cn=admin,dc=example,dc=test'
-    --env LDAP_BIND_PW='admin'
+    --env LDAP_BIND_PW='secret'
 
     # Postfix SASL auth provider (SASLAuthd instead of default Dovecot provider):
     --env ENABLE_SASLAUTHD=1
@@ -157,6 +157,10 @@ function setup_file() {
   local CUSTOM_SETUP_ARGUMENTS=(
     "${ENV_LDAP_CONFIG[@]}"
 
+    --env DOVECOT_AUTH_BIND=yes
+    --env DOVECOT_PASS_ATTRS='userID=user,userPassword=password'
+    --env DOVECOT_USER_ATTRS='=uid=5000,=gid=5000,=home=/var/mail/%{user | domain | lower}/%{user | username | lower},=mail=maildir:~/Maildir'
+
     # `hostname` should be unique when connecting containers via network:
     --hostname "custom-config.${DMS_DOMAIN}"
     --network "${DMS_TEST_NETWORK}"
@@ -172,7 +176,7 @@ function setup_file() {
 }
 
 function teardown_file() {
-  docker rm -f "${CONTAINER1_NAME}" "${CONTAINER2_NAME}"
+  docker rm -f "${CONTAINER1_NAME}" "${CONTAINER2_NAME}" "${CONTAINER3_NAME}"
   docker network rm "${DMS_TEST_NETWORK}"
 }
 
@@ -181,7 +185,8 @@ function teardown_file() {
 # As failure will bail early missing teardown, which then prevents network cleanup. This way is safer:
 function teardown() {
   if [[ ${CONTAINER_NAME} != "${CONTAINER1_NAME}" ]] \
-  && [[ ${CONTAINER_NAME} != "${CONTAINER2_NAME}" ]]
+  && [[ ${CONTAINER_NAME} != "${CONTAINER2_NAME}" ]] \
+  && [[ ${CONTAINER_NAME} != "${CONTAINER3_NAME}" ]]
   then
     _default_teardown
   fi
@@ -220,6 +225,37 @@ function teardown() {
     _run_in_container grep '# Testconfig for ldap integration' "${LDAP_CONFIG}"
     assert_success
   done
+
+  _run_in_container grep '^passdb_ldap_bind = yes$' /etc/dovecot/conf.d/auth-ldap.conf.ext
+  assert_success
+  _run_in_container grep '^    user = %{ldap:userID}$' /etc/dovecot/conf.d/auth-ldap.conf.ext
+  assert_success
+  _run_in_container grep '^    uid = 5000$' /etc/dovecot/conf.d/auth-ldap.conf.ext
+  assert_success
+  _run_in_container grep '^    gid = 5000$' /etc/dovecot/conf.d/auth-ldap.conf.ext
+  assert_success
+  _run_in_container grep '^    home = /var/mail/%{user | domain | lower}/%{user | username | lower}$' /etc/dovecot/conf.d/auth-ldap.conf.ext
+  assert_success
+  _run_in_container grep '^    mail_path = ~/Maildir$' /etc/dovecot/conf.d/auth-ldap.conf.ext
+  assert_success
+  _run_in_container grep '^    password = ' /etc/dovecot/conf.d/auth-ldap.conf.ext
+  assert_failure
+  _run_in_container grep '^    mail = ' /etc/dovecot/conf.d/auth-ldap.conf.ext
+  assert_failure
+}
+
+@test "dovecot: ldap authentication bind works" {
+  export CONTAINER_NAME=${CONTAINER3_NAME}
+
+  _run_in_container doveconf -n
+  assert_success
+  assert_output --partial 'bind = yes'
+
+  _run_in_container_bash "doveadm auth test 'some.user@${FQDN_LOCALHOST_A}' secret | grep 'auth succeeded'"
+  assert_success
+
+  _run_in_container_bash "doveadm auth test 'some.user@${FQDN_LOCALHOST_A}' wrongpassword | grep 'auth failed'"
+  assert_success
 }
 
 @test "postfix: ldap config overwrites success" {
@@ -249,7 +285,7 @@ function teardown() {
 
 # dovecot
 @test "dovecot: ldap imap connection and authentication works" {
-  _nc_wrapper 'auth/imap-ldap-auth.txt' '-w 1 0.0.0.0 143'
+  _send_raw_transaction 'auth/imap-ldap-auth.txt' '-w 1 0.0.0.0 143'
   assert_success
 }
 
@@ -264,14 +300,17 @@ function teardown() {
 
 @test "dovecot: ldap config overwrites success" {
   local LDAP_SETTINGS_DOVECOT=(
-    "uris = ldap://${FQDN_LDAP}"
-    'tls = no'
-    'base = ou=users,dc=example,dc=test'
-    'dn = cn=admin,dc=example,dc=test'
+    "ldap_uris = ldap://${FQDN_LDAP}" # ldap://ldap.example.test
+    'ldap_base = ou=users,dc=example,dc=test'
+    'ldap_auth_dn = cn=admin,dc=example,dc=test'
+    'ldap_starttls = no'
+    'ldap_version = 3'
+    'passdb_ldap_bind = no'
+    'passdb_default_password_scheme = SSHA'
   )
 
   for LDAP_SETTING in "${LDAP_SETTINGS_DOVECOT[@]}"; do
-    _run_in_container grep "${LDAP_SETTING%=*}" /etc/dovecot/dovecot-ldap.conf.ext
+    _run_in_container grep "${LDAP_SETTING%=*}" /etc/dovecot/conf.d/auth-ldap.conf.ext
     assert_output "${LDAP_SETTING}"
     assert_success
   done

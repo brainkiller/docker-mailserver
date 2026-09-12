@@ -6,7 +6,7 @@
 # -o pipefail :: exit on error in pipes
 set -eE -u -o pipefail
 
-VERSION_CODENAME='bookworm'
+VERSION_CODENAME='trixie'
 
 # shellcheck source=../helpers/log.sh
 source /usr/local/bin/helpers/log.sh
@@ -17,23 +17,30 @@ function _pre_installation_steps() {
   _log 'info' 'Starting package installation'
   _log 'debug' 'Running pre-installation steps'
 
-  _log 'trace' 'Updating package signatures'
+  _log 'trace' 'Refreshing local package index'
   apt-get "${QUIET}" update
 
   _log 'trace' 'Upgrading packages'
   apt-get "${QUIET}" upgrade
 
   _log 'trace' 'Installing packages that are needed early'
-  # Add packages usually required by apt to:
   local EARLY_PACKAGES=(
     # Avoid logging unnecessary warnings:
     apt-utils
-    # Required for adding third-party repos (/etc/apt/sources.list.d) as alternative package sources (eg: Dovecot CE and Rspamd):
+    # Required to ensure correct `clamav` ownership (for associated COPY in Dockerfile):
+    adduser
+    # Required to support adding third-party repos (/etc/apt/sources.list.d) as alternative package sources (eg: Dovecot CE and Rspamd):
     apt-transport-https ca-certificates curl gnupg
     # Avoid problems with SA / Amavis (https://github.com/docker-mailserver/docker-mailserver/pull/3403#pullrequestreview-1596689953):
     systemd-standalone-sysusers
   )
+
   apt-get "${QUIET}" install --no-install-recommends "${EARLY_PACKAGES[@]}" 2>/dev/null
+
+  # Ensure ownership is assigned to the `clamav` user/group (sync to the UID 200 ownership from the COPY instruction in the Dockerfile):
+  # When the `clamav` package is later installed it will use this UID instead (otherwise value assigned would vary when modifying the package list).
+  # https://github.com/docker-mailserver/docker-mailserver/issues/2942#issuecomment-1383512079
+  adduser --quiet --system --group --disabled-password --home /var/lib/clamav --no-create-home --uid 200 clamav
 }
 
 # Install third-party commands to /usr/local/bin
@@ -52,29 +59,36 @@ function _install_utils() {
       ;;
   esac
 
-  # TIP: `*.tar.gz` releases tend to forget to reset UID/GID ownership when archiving.
-  # When extracting with `tar` as `root` the archived UID/GID is kept, unless using `--no-same-owner`.
-  # Likewise when the binary is in a nested location the full archived path
-  # must be provided + `--strip-components` to extract the file to the target directory.
-  # Doing this avoids the need for (`mv` + `rm`) or (`--to-stdout` + `chmod +x`)
-  _log 'debug' 'Installing utils sourced from Github'
+  # NOTE: `*.tar.gz` releases tend to forget to reset UID/GID
+  #       ownership when archiving. When extracting with `tar`
+  #       as `root` the archived UID/GID is kept, unless using
+  #       `--no-same-owner`. Likewise when the binary is in a
+  #       nested location the full archived path must be
+  #       provided + `--strip-components` to extract the file
+  #       to the target directory. Doing this avoids the need
+  #       for (`mv` + `rm`) or (`--to-stdout` + `chmod +x`)
+  _log 'debug' 'Installing utilities from Github'
 
   _log 'trace' 'Installing jaq'
-  local JAQ_TAG='v2.3.0'
-  curl -sSfL "https://github.com/01mf02/jaq/releases/download/${JAQ_TAG}/jaq-$(uname -m)-unknown-linux-gnu" -o /usr/local/bin/jaq
+  local JAQ_VERSION='v3.1.1'
+  curl -sSfL -o /usr/local/bin/jaq \
+    "https://github.com/01mf02/jaq/releases/download/${JAQ_VERSION}/jaq-${ARCH_A}-unknown-linux-gnu"
   chmod +x /usr/local/bin/jaq
 
   _log 'trace' 'Installing step'
-  local STEP_RELEASE='0.28.7'
-  curl -sSfL "https://github.com/smallstep/cli/releases/download/v${STEP_RELEASE}/step_linux_${STEP_RELEASE}_${ARCH_B}.tar.gz" \
-    | tar -xz --directory /usr/local/bin --no-same-owner --strip-components=2 "step_${STEP_RELEASE}/bin/step"
+  local STEP_CLI_VERSION='0.30.6'
+  curl -sSfL -o /tmp/step-cli.deb \
+    "https://github.com/smallstep/cli/releases/download/v${STEP_CLI_VERSION}/step-cli_${ARCH_B}.deb"
+  dpkg -i /tmp/step-cli.deb
+  rm /tmp/step-cli.deb
 
   _log 'trace' 'Installing swaks'
   # `perl-doc` is required for `swaks --help` to work:
   apt-get "${QUIET}" install --no-install-recommends perl-doc
   local SWAKS_VERSION='20240103.0'
   local SWAKS_RELEASE="swaks-${SWAKS_VERSION}"
-  curl -sSfL "https://github.com/jetmore/swaks/releases/download/v${SWAKS_VERSION}/${SWAKS_RELEASE}.tar.gz" \
+  curl -sSfL \
+    "https://github.com/jetmore/swaks/releases/download/v${SWAKS_VERSION}/${SWAKS_RELEASE}.tar.gz" \
     | tar -xz --directory /usr/local/bin --no-same-owner --strip-components=1 "${SWAKS_RELEASE}/swaks"
 }
 
@@ -91,7 +105,7 @@ function _install_packages() {
   local CODECS_PACKAGES=(
     altermime arj bzip2
     cabextract cpio file
-    gzip lhasa liblz4-tool
+    gzip lhasa lz4
     lrzip lzop nomarch
     p7zip-full pax rpm2cpio
     unrar-free unzip xz-utils
@@ -142,27 +156,30 @@ function _install_packages() {
 
 function _install_dovecot() {
   local DOVECOT_PACKAGES=(
-    dovecot-core dovecot-imapd
-    dovecot-ldap dovecot-lmtpd dovecot-managesieved
-    dovecot-pop3d dovecot-sieve
+    dovecot-core
+    dovecot-lmtpd
+    dovecot-imapd
+    dovecot-pop3d
+    dovecot-sieve
+    dovecot-managesieved
+    dovecot-ldap
+    dovecot-flatcurve
+
+    # Additional Dovecot packages for supporting the DMS community (docs-only guide contributions)
+    dovecot-auth-lua
+    dovecot-solr
   )
 
-  # Additional Dovecot packages for supporting the DMS community (docs-only guide contributions).
-  DOVECOT_PACKAGES+=(dovecot-auth-lua)
-
-  # (Opt-in via ENV) Change repo source for dovecot packages to a third-party repo maintained by Dovecot.
-  # NOTE: AMD64 / x86_64 is the only supported arch from the Dovecot CE repo (thus noDMS built for ARM64 / aarch64)
-  # Repo: https://repo.dovecot.org/ce-2.4-latest/debian/bookworm/dists/bookworm/main/
+  # NOTE: (Opt-in via ENV) Change repo source for dovecot packages
+  #       to a third-party repo maintained by Dovecot.
+  # NOTE: Arch restriction required because AMD64 / x86_64 is the
+  #       only arch supported from the Dovecot CE repo.
+  # Repo: https://repo.dovecot.org/ce-2.4-latest/debian/trixie/dists/trixie/main/
   # Docs: https://repo.dovecot.org/#debian
-  if [[ ${DOVECOT_COMMUNITY_REPO} -eq 1 ]] && [[ "$(uname --machine)" == "x86_64" ]]; then
-    # WARNING: Repo only provides Debian Bookworm package support for Dovecot CE 2.4+.
-    # As Debian Bookworm only packages Dovecot 2.3.x, building DMS with this alternative package repo may not yet be compatible with DMS:
-    # - 2.3.19: https://salsa.debian.org/debian/dovecot/-/tree/stable/bookworm
-    # - 2.3.21: https://salsa.debian.org/debian/dovecot/-/tree/stable/bookworm-backports
-
+  if [[ ${DOVECOT_COMMUNITY_REPO:-0} -eq 1 ]] && [[ $(uname --machine) == 'x86_64' ]]; then
     _log 'trace' 'Adding third-party package repository (Dovecot)'
     curl -fsSL https://repo.dovecot.org/DOVECOT-REPO-GPG-2.4 \
-      | gpg --dearmor >/usr/share/keyrings/upstream-dovecot.gpg
+      | gpg --dearmor > /usr/share/keyrings/upstream-dovecot.gpg
     cat >/etc/apt/sources.list.d/upstream-dovecot.sources <<EOF
 Types: deb
 URIs: https://repo.dovecot.org/ce-2.4-latest/debian/${VERSION_CODENAME}
@@ -171,7 +188,6 @@ Components: main
 Signed-By: /usr/share/keyrings/upstream-dovecot.gpg
 EOF
 
-    # Refresh package index:
     apt-get "${QUIET}" update
 
     # This repo instead provides `dovecot-auth-lua` as a transitional package to `dovecot-lua`,
@@ -182,19 +198,20 @@ EOF
   _log 'debug' 'Installing Dovecot'
   apt-get "${QUIET}" install --no-install-recommends "${DOVECOT_PACKAGES[@]}"
 
-  # Runtime dependency for fts_xapian (built via `compile.sh`):
-  apt-get "${QUIET}" install --no-install-recommends libxapian30
+  # We remove the enabled-by-default Flatcurve configuration to disable FTS by default
+  rm /etc/dovecot/conf.d/90-fts-flatcurve.conf
 }
 
 function _install_rspamd() {
-  # NOTE: DMS only supports the rspamd package via using the third-party repo maintained by Rspamd (AMD64 + ARM64):
-  # Repo: https://rspamd.com/apt-stable/dists/bookworm/main/
-  # Docs: https://rspamd.com/downloads.html#debian-and-ubuntu-linux
-  # NOTE: Debian 12 provides Rspamd 3.4 (too old) and Rspamd discourages it's use
+  # NOTE: DMS only supports the Rspamd package by using the
+  #       third-party repo maintained by Rspamd (AMD64 + ARM64)
+  #
+  # REF: https://rspamd.com/apt-stable/dists/trixie/main/
+  #      https://rspamd.com/downloads.html#debian-and-ubuntu-linux
 
   _log 'trace' 'Adding third-party package repository (Rspamd)'
   curl -fsSL https://rspamd.com/apt-stable/gpg.key \
-    | gpg --dearmor >/usr/share/keyrings/upstream-rspamd.gpg
+    | gpg --dearmor > /usr/share/keyrings/upstream-rspamd.gpg
   cat >/etc/apt/sources.list.d/upstream-rspamd.sources <<EOF
 Types: deb
 URIs: https://rspamd.com/apt-stable/
@@ -203,23 +220,23 @@ Components: main
 Signed-By: /usr/share/keyrings/upstream-rspamd.gpg
 EOF
 
-  # Refresh package index:
-  apt-get "${QUIET}" update
-
   _log 'debug' 'Installing Rspamd'
+  apt-get "${QUIET}" update
   apt-get "${QUIET}" install rspamd redis-server
 }
 
 function _install_fail2ban() {
-  local FAIL2BAN_VERSION=1.1.0
-  local FAIL2BAN_DEB_URL="https://github.com/fail2ban/fail2ban/releases/download/${FAIL2BAN_VERSION}/fail2ban_${FAIL2BAN_VERSION}-1.upstream1_all.deb"
+  local FAIL2BAN_VERSION=1.1.1
+  # upstream1 was withdrawn (wrong install paths); use upstream2:
+  # https://github.com/fail2ban/fail2ban/issues/4222
+  local FAIL2BAN_DEB_URL="https://github.com/fail2ban/fail2ban/releases/download/${FAIL2BAN_VERSION}/fail2ban_${FAIL2BAN_VERSION}-1.upstream2_all.deb"
   local FAIL2BAN_DEB_ASC_URL="${FAIL2BAN_DEB_URL}.asc"
   local FAIL2BAN_GPG_FINGERPRINT='8738 559E 26F6 71DF 9E2C  6D9E 683B F1BE BD0A 882C'
   local FAIL2BAN_GPG_PUBLIC_KEY_ID='0x683BF1BEBD0A882C'
   local FAIL2BAN_GPG_PUBLIC_KEY_SERVER='hkps://keyserver.ubuntu.com'
 
   _log 'debug' 'Installing Fail2ban'
-  # Dependencies (https://github.com/docker-mailserver/docker-mailserver/pull/3403#discussion_r1306581431)
+  # Dependencies (https://github.com/docker-mailserver/docker-mailserver/pull/3403#discussion_r1306581431):
   apt-get "${QUIET}" install --no-install-recommends python3-pyinotify python3-dnspython python3-systemd
 
   gpg --keyserver "${FAIL2BAN_GPG_PUBLIC_KEY_SERVER}" --recv-keys "${FAIL2BAN_GPG_PUBLIC_KEY_ID}" 2>&1
@@ -241,12 +258,6 @@ function _install_fail2ban() {
 
   dpkg -i fail2ban.deb 2>&1
   rm fail2ban.deb fail2ban.deb.asc
-
-  _log 'debug' 'Patching Fail2ban to enable network bans'
-  # Enable network bans
-  # https://github.com/docker-mailserver/docker-mailserver/issues/2669
-  # https://github.com/fail2ban/fail2ban/issues/3125
-  sedfile -i -r 's/^_nft_add_set = .+/_nft_add_set = <nftables> add set <table_family> <table> <addr_set> \\{ type <addr_type>\\; flags interval\\; \\}/' /etc/fail2ban/action.d/nftables.conf
 }
 
 function _post_installation_steps() {
@@ -261,7 +272,9 @@ function _post_installation_steps() {
   apt-get "${QUIET}" clean
   rm -rf /var/lib/apt/lists/*
 
-  # Irrelevant - Debian's default `chroot` jail config for Postfix needed a separate syslog socket:
+  # Irrelevant config for DMS:
+  # Creating a separate syslog socket was necessary as Debian configured
+  # Postfix to run via chroot jail (DMS avoids that intentionally).
   rm /etc/rsyslog.d/postfix.conf
 }
 

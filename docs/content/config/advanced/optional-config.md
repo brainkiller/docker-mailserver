@@ -72,7 +72,7 @@ This is a list of all configuration files and directories which are optional, au
 - **before.dovecot.sieve:** Global Sieve filter file, applied prior to the `${login}.dovecot.sieve` filter. (Docs: [Sieve][docs-sieve])
 - **after.dovecot.sieve**: Global Sieve filter file, applied after the `${login}.dovecot.sieve` filter. (Docs: [Sieve][docs-sieve])
 - **postfix-main.cf:** Every line will be added to the postfix main configuration. (Docs: [Override Postfix Defaults][docs-override-postfix])
-- **postfix-master.cf:** Every line will be added to the postfix master configuration. (Docs: [Override Postfix Defaults][docs-override-postfix])
+- **postfix-master.cf:** Every line will be passed through `postconf -P`, it is **not** appended as a whole. (Docs: [Override Postfix Defaults][docs-override-postfix])
 - **postfix-accounts.cf:** User accounts file. Modify via the [`setup.sh email`][docs-setupsh] script.
 - **postfix-send-access.cf:** List of users denied sending. Modify via [`setup.sh email restrict`][docs-setupsh].
 - **postfix-receive-access.cf:** List of users denied receiving. Modify via [`setup.sh email restrict`][docs-setupsh].
@@ -109,6 +109,6 @@ This is a list of all configuration files and directories which are optional, au
 [docs-sieve]: ./mail-sieve.md
 [docs-setupsh]: ../../config/setup.sh.md
 [docs-ssl]: ../../config/security/ssl.md
-[docs-rspamd-override-d]: ../security/rspamd.md#manually
+[docs-rspamd-override-d]: ../security/rspamd.md#providing-custom-settings-overriding-settings
 [docs-rspamd-commands]: ../security/rspamd.md#with-the-help-of-a-custom-file
 [github-commit-setup-stack.sh-L411]: https://github.com/docker-mailserver/docker-mailserver/blob/941e7acdaebe271eaf3d296b36d4d81df4c54b90/target/scripts/startup/setup-stack.sh#L411

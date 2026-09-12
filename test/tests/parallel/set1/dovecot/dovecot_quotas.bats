@@ -135,6 +135,21 @@ function teardown_file() { _default_teardown ; }
   assert_output --partial 'check_policy_service inet:localhost:65265'
 }
 
+@test 'should defer quota checks for aliases to external addresses' {
+  _run_in_container doveconf -h quota_status_success
+  assert_output 'DUNNO'
+
+  _run_in_container doveconf -h quota_status_nouser
+  assert_output 'DUNNO'
+
+  _run_in_container doveconf -h quota_status_overquota
+  assert_output '552 5.2.2 Mailbox is full'
+
+  _run_in_container_bash "printf '%s\n' 'request=smtpd_access_policy' 'protocol_state=RCPT' 'protocol_name=SMTP' 'recipient=alias2@localhost.localdomain' '' | nc -q 1 127.0.0.1 65265"
+  assert_success
+  assert_output --partial 'action=DUNNO'
+}
+
 @test '(ENV POSTFIX_MAILBOX_SIZE_LIMIT) should be configured for both Postfix and Dovecot' {
   _run_in_container postconf -h mailbox_size_limit
   assert_output 4096000
@@ -144,9 +159,9 @@ function teardown_file() { _default_teardown ; }
   assert_output 4096000
 
   # Quota support:
-  _run_in_container doveconf -h plugin/quota_rule
+  _run_in_container doveconf -h quota_storage_size
   # Global default storage limit quota for each mailbox 4 MiB:
-  assert_output '*:storage=4M'
+  assert_output '4M'
 
   # Sizes are equivalent - Bytes to MiB (rounded):
   run numfmt --to=iec --format '%.0f' 4096000
@@ -157,7 +172,7 @@ function teardown_file() { _default_teardown ; }
   _run_in_container postconf -h message_size_limit
   assert_output 2048000
 
-  _run_in_container doveconf -h plugin/quota_max_mail_size
+  _run_in_container doveconf -h quota_mail_size
   assert_output '2M'
 
   # Sizes are equivalent - Bytes to MiB (rounded):
@@ -198,7 +213,7 @@ function teardown_file() { _default_teardown ; }
   run _repeat_until_success_or_timeout 20 _exec_in_container_bash "${CMD_GET_QUOTA} | grep -o 'Type=STORAGE Value=0 Limit=51200'"
   assert_success
 
-  # Deleting quota resets it to default global quota limit (`plugin/quota_rule`):
+  # Deleting quota resets it to default global quota limit (`quota_storage_size`):
   _run_in_container setup quota del 'user1@localhost.localdomain'
   assert_success
   run _repeat_until_success_or_timeout 20 _exec_in_container_bash "${CMD_GET_QUOTA} | grep -o 'Type=STORAGE Value=0 Limit=4096'"
@@ -206,8 +221,6 @@ function teardown_file() { _default_teardown ; }
 }
 
 @test 'should receive a warning mail from Dovecot when quota is exceeded' {
-  # skip 'disabled as it fails randomly: https://github.com/docker-mailserver/docker-mailserver/pull/2511'
-
   # Prepare
   _add_mail_account_then_wait_until_ready 'quotauser@otherdomain.tld'
 

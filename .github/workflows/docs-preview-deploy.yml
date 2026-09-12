@@ -92,7 +92,7 @@ jobs:
           context: 'Deploy Preview (pull_request => workflow_run)'
 
       - name: 'Send preview build to Netlify'
-        uses: nwtgck/actions-netlify@v3.0
+        uses: nwtgck/actions-netlify@v4.0
         id: preview-netlify
         timeout-minutes: 1
         env:
@@ -139,7 +139,7 @@ jobs:
           # production-deploy: false
 
       - name: 'Comment on PR with preview link'
-        uses: marocchino/sticky-pull-request-comment@v2
+        uses: marocchino/sticky-pull-request-comment@v3
         with:
           number: ${{ env.PR_NUMBER }}
           header: preview-comment
