@@ -6903,8 +6903,11 @@ X-Spam-Status: No, score=4.162 tagged_above=2 required=4
 <li>1 =&gt; Enabled</li>
 </ul>
 <h5 id="getmail_idle"><a class="toclink" href="#getmail_idle">GETMAIL_IDLE</a></h5>
+<p><code>getmail</code> Specify which getmail configs should be started with the --idle flag. By default it shall look for the folder INBOX. This can be changed by specifying the folder with a colon.
+This will only watch this specific folder for notification. <code>getmail</code> still fetches mailboxes (default INBOX).</p>
 <ul>
-<li><strong>auto</strong> =&gt; <code>getmail</code> Specify which getmail configs should be started with the --idle flag. By default it shall look for the folder INBOX. This can be changed by specifying the folder with a colon. If auto is set, it will be enable for ever IMAP config. Default: auto.</li>
+<li><strong>not set</strong> Default to unset to ensure that --idle enabled only on accounts where needed/wanted.</li>
+<li>auto =&gt; If auto is set, it will be enable for ever IMAP config.</li>
 <li>=&gt; e.g. GETMAIL_IDLE=account1,account2:MAILBOX</li>
 </ul>
 <h4 id="oauth2"><a class="toclink" href="#oauth2">OAUTH2</a></h4>
