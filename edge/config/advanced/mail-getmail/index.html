@@ -3095,9 +3095,9 @@ arguments =(&quot;-d&quot;,&quot;user1@example.com&quot;)
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GETMAIL_POLL=1</span>
 </code></pre></div>
 <h3 id="imap-idle-support"><a class="toclink" href="#imap-idle-support">IMAP IDLE support</a></h3>
-<p>IDLE is a IMAP feature describe in RFC 2177 that allows a client to indicate to the server that it is ready to accept notifications in real time.
+<p>IDLE is a IMAP feature described in RFC 2177 that allows a client to indicate to the server that it is ready to accept notifications in real time.
 This allows email users to receive near instant delivery of a new email.
-By default to folder "INBOX" is watched, this can be changed by specifying the FOLDER with a colon ':' eg: GETMAIL_IDLE=account1:MY_FOLDER</p>
+By default the folder "INBOX" is watched, this can be changed by specifying the FOLDER with a colon ':' eg: GETMAIL_IDLE=account1:MY_FOLDER</p>
 <div class="highlight"><pre><span></span><code><span class="nt">environment</span><span class="p">:</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GETMAIL_PARALLEL=1</span>
 <span class="w">  </span><span class="p p-Indicator">-</span><span class="w"> </span><span class="l l-Scalar l-Scalar-Plain">GETMAIL_IDLE=auto</span>
