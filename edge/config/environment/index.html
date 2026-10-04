@@ -6897,21 +6897,22 @@ X-Spam-Status: No, score=4.162 tagged_above=2 required=4
 <li><strong>5</strong> =&gt; <code>getmail</code> The number of minutes for the interval. Min: 1; Default: 5.</li>
 </ul>
 <h5 id="getmail_parallel"><a class="toclink" href="#getmail_parallel">GETMAIL_PARALLEL</a></h5>
-<p>Create a service for each getmail configuration so they can all run independently.</p>
+<p>Create a service for each getmail configuration so they can all run independently. Required for <a href="#getmail_idle"><code>GETMAIL_IDLE</code></a>.</p>
+<p>With parallel mode enabled, config files whose name contains characters other than <code>A-Z</code>, <code>a-z</code>, <code>0-9</code>, <code>.</code>, <code>_</code> and <code>-</code> are skipped.</p>
 <ul>
 <li><strong>0</strong> =&gt; Disabled</li>
 <li>1 =&gt; Enabled</li>
 </ul>
 <h5 id="getmail_idle"><a class="toclink" href="#getmail_idle">GETMAIL_IDLE</a></h5>
-<p><code>getmail</code> Specify which getmail configs should be started with the --idle flag.
-By default it shall look for the folder INBOX. This can be changed by specifying the folder with a colon.
-This will only watch this specific folder for notification. <code>getmail</code> still fetches mailboxes (default INBOX). 
-Important: Spaces are not trimmed and will cause everything after the first space to be silently ignored.</p>
-<p><strong>GETMAIL_IDLE</strong> will only be used when <strong>GETMAIL_PARALLEL</strong> is enabled.</p>
+<p>Comma-separated list of getmail configs that are started with the <code>--idle</code> flag. A config is selected by its file name without the <code>.cf</code> extension (<em>e.g. <code>user1</code> for <code>user1.cf</code></em>).
+By default the folder <code>INBOX</code> is watched. This can be changed by appending the folder with a colon (<em>e.g. <code>user1:MAILBOX</code></em>).
+This only watches that folder for notifications; <code>getmail</code> still fetches the folders configured in <code>mailboxes</code> (<em>default: <code>INBOX</code></em>).
+Spaces are not trimmed, so <code>user1, user2</code> does not select <code>user2</code>.</p>
+<p><strong>GETMAIL_IDLE</strong> only has an effect when <strong>GETMAIL_PARALLEL</strong> is enabled.</p>
 <ul>
-<li><strong>not set</strong> Default to unset to ensure that --idle enabled only on accounts where needed/wanted.</li>
-<li>auto =&gt; If auto is set, it will be enable for ever IMAP config.</li>
-<li>e.g. GETMAIL_IDLE=account1,account2:MAILBOX</li>
+<li><strong>empty</strong> =&gt; IMAP IDLE is disabled for all configs</li>
+<li>auto =&gt; IMAP IDLE is enabled for every IMAP config</li>
+<li>e.g. <code>user1,user2:MAILBOX</code> =&gt; IMAP IDLE is enabled for <code>user1.cf</code> (<em>watching <code>INBOX</code></em>) and <code>user2.cf</code> (<em>watching <code>MAILBOX</code></em>)</li>
 </ul>
 <h4 id="oauth2"><a class="toclink" href="#oauth2">OAUTH2</a></h4>
 <h5 id="enable_oauth2"><a class="toclink" href="#enable_oauth2">ENABLE_OAUTH2</a></h5>
